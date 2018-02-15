@@ -1,0 +1,15 @@
+{
+  "name": "jsonyml",
+  "version": "1.0.0",
+  "description": "microservice to convert json to yml and vice versa",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Milo van der Linden",
+  "license": "GPL-3.0+",
+  "dependencies": {
+    "js-yaml": "^3.10.0"
+  }
+}
