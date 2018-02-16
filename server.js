@@ -5,6 +5,24 @@
   var yaml = require('js-yaml');
 
   /**
+   * Parse the params of the request.
+   */
+  function params(req){
+    var q = req.url.split('?');
+    var result = {};
+    if(q.length >= 2) {
+      q[1].split('&').forEach( function(item) {
+        try {
+          result[item.split('=')[0]]=item.split('=')[1];
+        } catch (e) {
+          result[item.split('=')[0]]='';
+        }
+      });
+    }
+    return result;
+  }
+
+  /**
    * Helper to set headers
    */
   function setHeaders(type){
@@ -29,15 +47,29 @@
 
   function yamlToJson(_url, callback){
     getSource(_url, function(e, data){
-      var doc = yaml.safeLoad(data);
-      callback(e, doc);
+      var doc;
+      if(!e){
+        try {
+          doc = JSON.stringify(yaml.safeLoad(data));
+          callback(e, doc);
+        } catch (ex) {
+          callback (ex, null);
+        }
+      }
     });
   }
 
   function jsonToYaml(_url, callback){
     getSource(_url, function(e, data){
-      var doc = yaml.safeDump(JSON.parse(data));
-      callback(e, doc);
+      var doc;
+      if(!e){
+        try {
+          doc = yaml.safeDump(JSON.parse(data));
+          callback(e, doc);
+        } catch (ex) {
+          callback (ex, null);
+        }
+      }
     });
   }
 
@@ -48,60 +80,65 @@
     } else {
       httpors = require("http");
     }
+    try {
+      var req = httpors.get(_url, function(res) {
+        var data = '';
 
-    var req = httpors.get(_url, function(res) {
-      var data = '';
+        res.on('data', function(chunk) {
+          data += chunk;
+        });
 
-      res.on('data', function(chunk) {
-        data += chunk;
+        res.on('error', function(e) {
+          callback(e, null);
+        });
+
+        res.on('timeout', function(e) {
+          callback(e, null);
+        });
+
+        res.on('end', function() {
+          if(res.statusCode === 200){
+            callback(null, data);
+          } else {
+            callback(res.statusCode, null);
+          }
+
+        });
       });
-
-      res.on('error', function(e) {
-        callback(e, null);
-      });
-
-      res.on('timeout', function(e) {
-        callback(e, null);
-      });
-
-      res.on('end', function() {
-        callback(null, data);
-      });
-    });
+    } catch (e){
+      callback(e, null);
+    }
   }
   /**
    * The main object.
    */
   var server = http.createServer(function(request, response){
-    var path = url.parse(request.url).pathname;
-
-    switch(path){
-      case '/':
-        response.writeHead(200);
-        response.write('nothing here');
-        response.end();
-        break;
-      case '/tojson':
-        yamlToJson("https://raw.githubusercontent.com/publiccodenet/publiccode.yml/master/example/publiccode.yml", function(e, data){
-          response.writeHead(200, setHeaders("json"));
-          response.write(data, "utf8");
-          response.end();
-        });
-        break;
-      case '/toyaml':
-        jsonToYaml("https://raw.githubusercontent.com/BetaNYC/civic.json/master/civic.json", function(e, data){
+    var _params = params(request);
+    if (_params.f){
+      jsonToYaml(_params.f, function(e, data){
+        if(!e){
           response.writeHead(200, setHeaders("yaml"));
           response.write(data, "utf8");
           response.end();
-        });
-
-        break;
-      default:
-        response.writeHead(404);
-        response.write("oops this doesn't exist, did you mean /tojson or /toyaml? - 404");
-        response.end();
-        break;
-      }
+        } else {
+          yamlToJson(_params.f, function(e, data){
+            if(!e){
+              response.writeHead(200, setHeaders("json"));
+              response.write(data, "utf8");
+              response.end();
+            } else {
+              response.writeHead(404);
+              response.write("oops that went wrong. Did you feed me json or yaml? - 404");
+              response.end();
+            }
+          });
+        }
+      });
+    } else {
+      response.writeHead(404);
+      response.write("You had one job. Put a remote file in parameter ?f= and try again - 404");
+      response.end();
+    }
   });
 
   module.exports = server;
